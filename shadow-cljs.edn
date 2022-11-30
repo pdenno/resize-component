@@ -1,0 +1,17 @@
+{:dependencies [[reagent "1.1.0"]
+                [arttuka/reagent-material-ui "5.10.1-0"]
+                [cljsjs/react                "17.0.2-0"]
+                [cljsjs/react-dom            "17.0.2-0"]
+                [lilactown/hx                "0.5.3"]]
+
+ :nrepl {:port 7006}
+ :source-paths ["src"]
+ :builds       {:dev {:target           :browser
+                      :output-dir       "resources/public/js"
+                      :asset-path       "/js"
+                      :modules          {:app {:entries [example.core]}}
+                      :compiler-options {:infer-externs :auto
+                                         :output-feature-set :es2018}
+                      :js-options       {:anon-fn-naming-policy :unmapped}
+                      :devtools         {:http-root "resources/public"
+                                         :http-port 9500}}}}
