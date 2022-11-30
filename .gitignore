@@ -6,4 +6,4 @@ js-example/resizable-drawer.zip
 node_modules/
 npm.cljs.edn
 package-lock.json
-resources/public
+resources/public/js
