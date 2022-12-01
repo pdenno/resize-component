@@ -1,49 +1,28 @@
-(ns ^:figwheel-hooks example.core
-  (:require-macros [reagent-mui.util :refer [react-component]])
-  (:require ["react" :as react] ; to explore hooks
-            [reagent.core :as r]
-            [reagent.dom :as rdom]
-            [reagent-mui.cljs-time-adapter :refer [cljs-time-adapter]]
-            [reagent-mui.colors :as colors]
-            [reagent-mui.material.box :refer [box]]
-            [reagent-mui.material.button :refer [button]]
-            [reagent-mui.material.css-baseline :refer [css-baseline]]
-            [reagent-mui.material.divider :refer [divider]]
-            [reagent-mui.material.drawer :refer [drawer]]
-            [reagent-mui.material.list :refer [list]]
-            [reagent-mui.material.list-item :refer [list-item]]
-            [reagent-mui.material.list-item-icon :refer [list-item-icon]]
-            [reagent-mui.material.list-item-text :refer [list-item-text]]
-            [reagent-mui.material.stack :refer [stack]]
-            [reagent-mui.material.text-field :refer [text-field]]
-            [reagent-mui.material.toolbar :refer [toolbar]]
-            [reagent-mui.material.typography :refer [typography]]
-            [reagent-mui.icons.add-box :refer [add-box]]
-            [reagent-mui.icons.email :refer [email]]
-            [reagent-mui.icons.inbox :refer [inbox]]
-            [reagent-mui.x.localization-provider :refer [localization-provider]]
-            [reagent-mui.styles :as styles]
-            ;; For the hooks experiment
-            [hx.react :as hx :refer [defnc $]]
-            [hx.hooks :as hooks]
-            #_["@mui/material/Stack$default" :as stack]
-            #_["@mui/material/TextField$default" :as text-field]
-            #_["@mui/material/Typography" :as typography]            
-            #_["@mui/material/Box$default" :as box]      
-            ["react-dom" :as react-dom])
-  ;; Other stuff
-  (:import (goog.i18n DateTimeSymbols_en_US)))
+(ns example.core
+  (:require
+   ["@mui/material/Typography$default" :as Typography]
+   ["@mui/material/TextField$default" :as TextField]
+   ["@mui/material/Stack$default" :as Stack]
+   ["@mui/material/Divider$default" :as Divider]
+   ["@mui/material/Box$default" :as MuiBox]
+   ["@mui/material/styles" :as styles]
+   ["@mui/material/CssBaseline" :refer [css-baseline]]
+   ["@mui/material/colors" :refer [colors]]
+   #_["@mui/material/colors/purple" :refer [purple]]
+   ;["@mui/x-date-pickers/LocalizationProvider" :refer [localization-provider]]
 
-(set! *warn-on-infer* true)
+   #_["@mui/icons-material/ArrowDownward" :as AEH]
 
-(defn event-value
-  [e]
-  (.. e -target -value))
+   [helix.core :refer [defnc $]]
+   [helix.hooks :as hooks]
+   [helix.dom :as d]
+   ["react-dom/client" :as react-dom]))
 
-;; Example
-(def custom-theme
+#_(def custom-theme
   {:palette {:primary   colors/purple
              :secondary colors/green}})
+
+(def custom-theme {})
 
 (def classes (let [prefix "rmui-example"]
                {:root       (str prefix "-root")
@@ -63,35 +42,12 @@
      (str "& ." (:dragger classes))    {:width "30px",
                                         :height "150px", ; "100%" ; not good
                                         :cursor "ew-resize",
-                                        #_#_:padding "0px" ;"4px 0 0",
-                                        #_#_:borderTop "1px solid #ddd",
-                                        #_#_:position "absolute",
-                                        #_#_:top 0,
-                                        #_#_:right 100,
-                                        #_#_:bottom 0,
-                                        :zIndex 100,
-                                        :backgroundColor "black" #_"#000000" #_"#f4a7f9"}
+                                        :backgroundColor "black"}
      (str "& ." (:drawer classes))     {:flexShrink 0}}))
 
-;;;============================= dragger ==================================
-;;; =======> New goal here should be to develop a component consisting of two boxes and a divider <=============
-(def minDrawerWidth 50)
-(def maxDrawerWidth 1000)
-(def diag (atom nil))
-
-(defonce text-state (r/atom "foobar"))
-(defonce select-state (r/atom 1))
-(defonce date-picker-state (r/atom nil))
-(defonce autocomplete-state (r/atom nil))
-
-(defonce left-editor-width  (r/atom 500))
-(defonce right-editor-width (r/atom 500))
-(defonce horiz-drag-pos     (r/atom nil))
-
-;;; https://www.juxt.pro/blog/react-hooks-raw/ <========== Back out of this; I'm not taking that approach.
-(defn e 
-  [el props & children]
-  (apply react/createElement el (clj->js props) children))
+;;; https://github.com/lilactown/helix/blob/master/docs/creating-elements.md#-macro
+;;; The $ macro takes a component type (string, keyword, or symbol referring to a Component), optionally some props,
+;;; and any children, and returns a React Element with that same information, like React.createElement.
 
 ;;; This declares a new state variable. It is something you'd do with React hooks.
 ;;; https://reactjs.org/docs/hooks-intro.html
@@ -101,104 +57,84 @@
 ;;;    const newWidth = e.clientX - document.body.offsetLeft;
 ;;;    if (newWidth > minDrawerWidth && newWidth < maxDrawerWidth) {
 ;;;      setDrawerWidth(newWidth); }
-(defn handle-mouse-move [e]
-  (let [mouse-x (. e -clientX)]
-    (reset! horiz-drag-pos mouse-x)
-    (js/console.log (str "x = " mouse-x))))
+(defonce text-state         (atom "Initial Text"))
+(defonce horiz-drag-pos     (atom nil))
+(defn event-value [e] (.. e -target -value))
 
-;;;  const handleMouseUp = () => {
-;;;    document.removeEventListener("mouseup", handleMouseUp, true);
-;;;    document.removeEventListener("mousemove", handleMouseMove, true); }
-(defn handle-mouse-up []
-  (js/console.log "UP")
-  (js/document.removeEventListener "mouseup"   handle-mouse-up)
-  (js/document.removeEventListener "mousemove" handle-mouse-move))
+(defnc Dragger []
+  (let [[position set-position] (hooks/use-state {:pos 500})]
+    (letfn [(handle-mouse-move [e]
+              (let [mouse-x (. e -clientX)]
+                (reset! horiz-drag-pos mouse-x)
+                (js/console.log (str "x = " mouse-x))))
+            (handle-mouse-up []
+              (js/console.log "UP")
+              (js/document.removeEventListener "mouseup"   handle-mouse-up)
+              (js/document.removeEventListener "mousemove" handle-mouse-move))
+            (handle-mouse-down [e]
+              (js/console.log "DOWN" e)
+              (js/document.addEventListener "mouseup"   handle-mouse-up)
+              (js/document.addEventListener "mousemove" handle-mouse-move))]
+    ($ Stack
+       {:direction "row"
+        :display   "flex" ; I'm guessing; there was no :display except here: (on a box) https://mui.com/material-ui/react-divider/
+        :spacing   2}
 
-;;;  const handleMouseDown = e => {
-;;;    document.addEventListener("mouseup", handleMouseUp, true);
-;;;    document.addEventListener("mousemove", handleMouseMove, true); }
-(defn handle-mouse-down [e]
-  (js/console.log "DOWN" e)
-  (js/document.addEventListener "mouseup"   handle-mouse-up)
-  (js/document.addEventListener "mousemove" handle-mouse-move))
-
-(defnc MyComponent [{:keys [initial-name]}]
-  ;; use React Hooks for state management
-  (let [[name update-name] (hooks/useState initial-name)]
-    [:<>
-     [:div "Hello " 
-      [:span {:style {:font-weight "bold"}} name] "!"]
-     [:div [:input {:on-change #(update-name (-> % .-target .-value))}]]]))
-
-#_(defnc Dragger  [{:keys [initial-pos]}]
-  (let [[pos update-pos] (hooks/useState initial-pos)]
-    [:<>
-     [$ stack {:direction :row
-               :display   "flex" ; I'm guessing; there was no :display except here: (on a box) https://mui.com/material-ui/react-divider/
-               :spacing   2}     ; This is used on the stack example with a divider too. Without it, divider will touch 2nd.
-      
-      [$ text-field
+    ($ TextField
        {:id          "data-editor"
+        :width       "fit-content"
         :value       @text-state
         :label       "Data"
         :placeholder "Placeholder"
-        :class       (:text-field classes)
-        :on-change   (fn [e] (reset! text-state (event-value e)))
         :multiline   true
-        :rows        10}]
-      
-      [$ box
-       {:class         (:dragger classes)
-        :on-mouse-down handle-mouse-down
-        :on-mouse-up   handle-mouse-up
-        :on-mouse-move handle-mouse-move}]
-      
-      [$ text-field
-       {:id          "rm-editor"
-        :value       @text-state
-        :label       "Editor"
-        :placeholder "Placeholder"
-        :class       (:text-field classes)
-        :on-change   (fn [e] (reset! text-state (event-value e)))
-        :multiline   true
-        :rows        10}]]]))
-  
-;;;=============================================================================
-(defn form* [{:keys [class-name]}]
-  [stack {:direction "column"
-          :spacing   2
-          :class     [class-name (:root classes)]}
-   [typography
-    {:variant :h3
-     :color "white"
-     :width "100%"
-     :padding "5px 0px 5px 40px"
-     :backgroundColor "primary.main"
-     :noWrap  true}
-    "RADmapper"]
-   ;; hx/f transforms Hiccup into a React element.
-   ;; We only have to use it when we want to use hiccup outside of `defnc` / `defcomponent`
-   (hx/f [MyComponent {:initial-name "React in CLJS"}])])      ;[Dragger {:initial-pos 500}
+        :rows        8})
 
-(def form (styles/styled form* custom-styles))
+     ($ MuiBox
+        {:id "a-box"
+         :width  5
+         :height 250
+         :border "1px dashed grey"
+         :cursor "ew-resize", ; ew = east-west?
+         :onMouseDown handle-mouse-down
+         :onMouseUp   handle-mouse-up
+         :onMouseMove handle-mouse-move
+         :backgroundColor "black",
+         :&:hover {:backgroundColor "primary.main", ; This from the MUI doc example, https://mui.com/material-ui/react-box/
+                   :opacity [0.9, 0.8, 0.7]}})
 
-(defn main []
-  ;; fragment
-  [:<>
-   [css-baseline]
-   ;; localization-provider provides date handling utils to date and time pickers.
-   ;; cljs-time-adapter is a date adapter that allows you to use cljs-time / goog.date date objects.
-   [localization-provider {:date-adapter   cljs-time-adapter
-                           :adapter-locale DateTimeSymbols_en_US}
-    [styles/theme-provider (styles/create-theme custom-theme)
-     [form]]]])
+     ($ TextField
+        {:id          "rm-editor"
+         :width       "100%" ;"500px" ; ignored.
+         :value       @text-state
+         :label       "Editor"
+         :placeholder "Placeholder"
+         :multiline   true
+         :rows        8})))))
 
-(defn ^{:after-load true, :dev/after-load true}
-  mount []
-  (rdom/render [main] (js/document.getElementById "app")))
+(defnc app []
+  (let [[state set-state] (hooks/use-state {:name "Helix User"})]
+    (d/div
+     ($ Typography {:variant "h3"
+                    :color "white"
+                    :backgroundColor "primary.main"
+                    :padding "2px 0 2px 30px"
+                    :noWrap  false}
+        "RADmapper")
+     #_($ styles/ThemeProvider
+        (styles/createTheme (clj->js custom-theme))
+        ($ Box {:id "box2"
+                :width  "100px"
+                :height "100px"
+                :backgroundcolor "black"
+                :backgroundColor "primary.dark"}))
+     ;; create elements out of components
+     ($ Dragger))))
+
+;; start your app with your favorite React renderer
+(defonce root (react-dom/createRoot (js/document.getElementById "app")))
+
+(defn ^{:after-load true, :dev/after-load true} mount []
+  (.render root ($ app)))
 
 (defn ^:export init []
   (mount))
-
-
-
