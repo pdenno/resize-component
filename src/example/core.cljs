@@ -3,26 +3,20 @@
    ["@mui/material/Typography$default" :as Typography]
    ["@mui/material/TextField$default" :as TextField]
    ["@mui/material/Stack$default" :as Stack]
-   ["@mui/material/Divider$default" :as Divider]
    ["@mui/material/Box$default" :as MuiBox]
    ["@mui/material/styles" :as styles]
    ["@mui/material/CssBaseline" :refer [css-baseline]]
-   ["@mui/material/colors" :refer [colors]]
-   #_["@mui/material/colors/purple" :refer [purple]]
+   ["@mui/material/colors" :as colors]
    ;["@mui/x-date-pickers/LocalizationProvider" :refer [localization-provider]]
-
-   #_["@mui/icons-material/ArrowDownward" :as AEH]
-
+   [applied-science.js-interop :as j]
    [helix.core :refer [defnc $]]
    [helix.hooks :as hooks]
    [helix.dom :as d]
    ["react-dom/client" :as react-dom]))
 
-#_(def custom-theme
+(def custom-theme
   {:palette {:primary   colors/purple
              :secondary colors/green}})
-
-(def custom-theme {})
 
 (def classes (let [prefix "rmui-example"]
                {:root       (str prefix "-root")
@@ -45,90 +39,135 @@
                                         :backgroundColor "black"}
      (str "& ." (:drawer classes))     {:flexShrink 0}}))
 
-;;; https://github.com/lilactown/helix/blob/master/docs/creating-elements.md#-macro
 ;;; The $ macro takes a component type (string, keyword, or symbol referring to a Component), optionally some props,
 ;;; and any children, and returns a React Element with that same information, like React.createElement.
-
-;;; This declares a new state variable. It is something you'd do with React hooks.
-;;; https://reactjs.org/docs/hooks-intro.html
-;;; const [drawerWidth, setDrawerWidth] = React.useState(defaultDrawerWidth);
-
-;;;  const handleMouseMove = useCallback(e => {
-;;;    const newWidth = e.clientX - document.body.offsetLeft;
-;;;    if (newWidth > minDrawerWidth && newWidth < maxDrawerWidth) {
-;;;      setDrawerWidth(newWidth); }
 (defonce text-state         (atom "Initial Text"))
-(defonce horiz-drag-pos     (atom nil))
 (defn event-value [e] (.. e -target -value))
+(defonce diag (atom nil))
+(def move-event (atom nil))
 
-(defnc Dragger []
-  (let [[position set-position] (hooks/use-state {:pos 500})]
-    (letfn [(handle-mouse-move [e]
-              (let [mouse-x (. e -clientX)]
-                (reset! horiz-drag-pos mouse-x)
-                (js/console.log (str "x = " mouse-x))))
-            (handle-mouse-up []
-              (js/console.log "UP")
-              (js/document.removeEventListener "mouseup"   handle-mouse-up)
-              (js/document.removeEventListener "mousemove" handle-mouse-move))
-            (handle-mouse-down [e]
+(defnc Resizable [{:keys [the-ref axis backgroundColor init-width init-height]}]
+  (let [[coords set-coords] (hooks/use-state {:x 200 :y 200}) ; js/Infinity
+        [dims set-dims]     (hooks/use-state {:width init-width :height init-height})
+        [size set-size]     (hooks/use-state {:width init-width :height init-height})
+        cursor (case axis :both "nwse-resize" :vertical "ns-resize" :horizonal "ew-resize")
+        resize   (fn [e]
+                   (when-let [current (.-current the-ref)]
+                     (when e
+                       (let [width  (- (+ (:width  dims) (j/get e .-clientX)) (:x coords)) ; Change these for REAL movement.
+                             height (- (+ (:height dims) (j/get e .-clientY)) (:y coords))]
+                         (js/console.log (str "**** I run when 'coords' changes. size=" size ))
+                         (set-size {:width width :height height})
+                         (set-dims {:width width :height height})))))]
+    (hooks/use-effect [coords] (resize @move-event))
+    (letfn [(do-drag [e]
+              (reset! move-event e)
+              (js/console.log (str "mouse move x = " (j/get e .-clientX) " y = " (j/get e .-clientY)))
+              (set-coords {:x (j/get e .-clientX) :y (j/get e .-clientY)}))
+            (start-drag [e]
               (js/console.log "DOWN" e)
-              (js/document.addEventListener "mouseup"   handle-mouse-up)
-              (js/document.addEventListener "mousemove" handle-mouse-move))]
-    ($ Stack
-       {:direction "row"
-        :display   "flex" ; I'm guessing; there was no :display except here: (on a box) https://mui.com/material-ui/react-divider/
-        :spacing   2}
+              (js/document.addEventListener "mouseup"   stop-drag)
+              (js/document.addEventListener "mousemove" do-drag))
+            (stop-drag []
+              (js/console.log "UP")
+              (js/document.removeEventListener "mouseup"   stop-drag)
+              (js/document.removeEventListener "mousemove" do-drag))]
+      ($ MuiBox
+         {:backgroundColor backgroundColor
+          :width       (:width size)
+          :height      (:height size)
+          :onMouseDown start-drag
+          :onMouseMove do-drag
+          :onMouseUp   stop-drag}))))
 
-    ($ TextField
-       {:id          "data-editor"
-        :width       "fit-content"
-        :value       @text-state
-        :label       "Data"
-        :placeholder "Placeholder"
-        :multiline   true
-        :rows        8})
+(def drag-event (atom nil))
 
-     ($ MuiBox
-        {:id "a-box"
-         :width  5
-         :height 250
-         :border "1px dashed grey"
-         :cursor "ew-resize", ; ew = east-west?
-         :onMouseDown handle-mouse-down
-         :onMouseUp   handle-mouse-up
-         :onMouseMove handle-mouse-move
-         :backgroundColor "black",
-         :&:hover {:backgroundColor "primary.main", ; This from the MUI doc example, https://mui.com/material-ui/react-box/
-                   :opacity [0.9, 0.8, 0.7]}})
 
-     ($ TextField
-        {:id          "rm-editor"
-         :width       "100%" ;"500px" ; ignored.
-         :value       @text-state
-         :label       "Editor"
-         :placeholder "Placeholder"
-         :multiline   true
-         :rows        8})))))
+(defnc Dragger [{:keys [the-ref direction] :or {direction "row"}}]
+  {:helix/features {:check-invalid-hooks-usage true}}
+  (let [[coords set-coords] (hooks/use-state {:x 250 :y 250})
+        [size set-size]     (hooks/use-state {:width 250 :height 250})
+        [dims set-dims]     (hooks/use-state {:width 250 :height 250})
+        size-atm            (atom 250)
+        cursor              (case (keyword direction) :column "ns-resize" :row "ew-resize")
+        resize              (fn [e] (when-let [current (.-current the-ref)]
+                                      (when e
+                                        (js/console.log "***CALLING set-dims ***")
+                                        (set-dims {:width 300 :height 300}))))]
+    #_(js/console.log (str "I can log here: "
+                           (.-width (.getComputedStyle js/window (-> js/document (.getElementById "the-stack"))))))
+
+
+    (letfn [(do-drag [e]
+              (reset! drag-event e)
+              (let [mouse-x (j/get e .-clientX)]
+                (reset! size-atm mouse-x)
+                (set-size {:width @size-atm})))
+            (start-drag [e]
+              (js/console.log "DOWN" e)
+              (js/document.addEventListener "mouseup"   stop-drag)
+              (js/document.addEventListener "mousemove" do-drag))
+            (stop-drag []
+              (js/console.log "UP")
+              (js/document.removeEventListener "mouseup"   stop-drag)
+              (js/document.removeEventListener "mousemove" do-drag))]
+      (hooks/use-effect
+         :always
+         [size]
+         (js/console.log (str "I run when 'size' changes:" size))
+         (resize @drag-event))
+
+      ($ Stack
+         {:id "the-stack"
+          :direction direction ; "row" or "column"
+          :display   "flex" ; I'm guessing; there was no :display except here: (on a box) https://mui.com/material-ui/react-divider/
+          :spacing   1}
+
+         ($ MuiBox
+             {:id          "box-1"
+              :height      250
+              :width       (:width dims)
+              :onMousedown stop-drag
+              :onMouseUp   stop-drag
+              :backgroundColor "purple"})
+
+         ($ MuiBox
+            {:id "dragger"
+             :width  5
+             :height 250
+             :border "1px dashed grey"
+             :cursor "ew-resize", ; ew = east-west? Works on reagent version, not here.
+             :onMouseDown start-drag
+             :onMouseMove do-drag
+             :onMouseUp   stop-drag
+             :backgroundColor "black"})
+
+         ($ MuiBox
+            {:id          "box-2"
+             :height      250
+             :width       (:width dims)
+             :onMousedown stop-drag
+             :onMouseUp   stop-drag
+             :backgroundColor "blue"})))))
 
 (defnc app []
+  {:helix/features {:check-invalid-hooks-usage true}}
   (let [[state set-state] (hooks/use-state {:name "Helix User"})]
     (d/div
-     ($ Typography {:variant "h3"
-                    :color "white"
+     ($ Typography {:variant         "h3"
+                    :color           "white"
                     :backgroundColor "primary.main"
-                    :padding "2px 0 2px 30px"
+                    :padding         "2px 0 2px 30px"
                     :noWrap  false}
         "RADmapper")
-     #_($ styles/ThemeProvider
-        (styles/createTheme (clj->js custom-theme))
-        ($ Box {:id "box2"
-                :width  "100px"
-                :height "100px"
-                :backgroundcolor "black"
-                :backgroundColor "primary.dark"}))
-     ;; create elements out of components
-     ($ Dragger))))
+     ;; ToDo: Theme is supposed to wrap the code!
+     #_(styles/ThemeProvider (styles/createTheme (clj->js custom-theme)))
+     ($ Dragger {:the-ref (hooks/use-ref "dragger-ref")})
+     #_($ Resizable {:axis :both
+                   :the-ref (hooks/use-ref "the-ref") ; :ref and :key are reserved
+                   :backgroundColor "blue"
+                   :init-width 100
+                   :init-height 100}))))
 
 ;; start your app with your favorite React renderer
 (defonce root (react-dom/createRoot (js/document.getElementById "app")))
@@ -138,3 +177,5 @@
 
 (defn ^:export init []
   (mount))
+
+
