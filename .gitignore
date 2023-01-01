@@ -7,3 +7,4 @@ node_modules/
 npm.cljs.edn
 package-lock.json
 resources/public/js
+.clj-kondo/.cache
