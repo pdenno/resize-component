@@ -48,13 +48,13 @@
          ($ MuiBox {:ref u-ref :height (:size up-height)} up)
          ($ MuiBox {:ref d-ref :height (:size dn-height)} down)))))
 
-(defnc ShareLeftRight [{:keys [left right]}]
+(defnc ShareLeftRight [{:keys [left right height] :or {height 300}}]
   {:helix/features {:check-invalid-hooks-usage true}}
   (let [[lwidth set-lwidth] (hooks/use-state {:size "50%"})
         [rwidth set-rwidth] (hooks/use-state {:size "50%"})
         l-ref (hooks/use-ref nil)
         r-ref (hooks/use-ref nil)
-        mouse-down? (atom false)] ; ToDo: Why is this necessary? (It is necessary.)
+        mouse-down? (atom false)]
     (letfn [(do-drag [e]
               (when @mouse-down?
                 (when-let [rbox (j/get r-ref :current)]
@@ -77,8 +77,8 @@
       ($ Stack
          {:direction "row"
           :display   "flex"
-          :height    300 #_"100%"   ; Use of mouse-down? helped here?!?
-          :width     "100%"   ; This (e.g. 300) can be used to limit width.
+          :height    height
+          :width     "100%"
           :spacing   0
           :divider ($ Divider {:variant "active-vert"
                                :width 5
