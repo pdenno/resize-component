@@ -7,7 +7,11 @@
    [helix.core :refer [defnc $]]
    [helix.hooks :as hooks]))
 
-(defnc ShareUpDown [{:keys [up down]}]
+(defnc ShareUpDown
+  "Create a Stack with two children (props :up and :down) where the
+   area shared between the two can be distributed by dragging the Stack divider,
+   a black bar that could be viewed as the frame dividing the two."
+  [{:keys [up down]}]
   {:helix/features {:check-invalid-hooks-usage true}}
   (let [[up-height set-up-height] (hooks/use-state {:size "50%"})
         [dn-height set-dn-height] (hooks/use-state {:size "50%"})
@@ -48,7 +52,13 @@
          ($ MuiBox {:ref u-ref :height (:size up-height)} up)
          ($ MuiBox {:ref d-ref :height (:size dn-height)} down)))))
 
-(defnc ShareLeftRight [{:keys [left right height] :or {height 300}}]
+(defnc ShareLeftRight
+  "Create a Stack with two children (props :left and :right) where the
+   area shared between the two can be distributed by dragging the Stack divider,
+   a black bar that could be viewed as the frame dividing the two.
+   Optional :height (defaults to 300px) can be used to give height other than
+   that needed to fit the children. "
+  [{:keys [left right height] :or {height 300}}]
   {:helix/features {:check-invalid-hooks-usage true}}
   (let [[lwidth set-lwidth] (hooks/use-state {:size "50%"})
         [rwidth set-rwidth] (hooks/use-state {:size "50%"})
